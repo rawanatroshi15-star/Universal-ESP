@@ -2898,7 +2898,8 @@ end
 -- يعمل داخل حلقة الرسم (بعد سكربت الكاميرا) ويحرّك الكاميرا نحو أقرب هدف داخل FOV.
 -- يستخدم Team Check و مسافة الكشف من الإعدادات العامة.
 local Aim = { lock = nil }
-do
+-- ملاحظة: الوحدة داخل دالة مستقلة لأن Luau يحدّ المتغيرات المحلية بـ 200 في المستوى الرئيسي
+local function setupAim()
     Config.AimFOV = math.clamp(Config.AimFOV, 20, 600)
     Config.AimSmooth = math.clamp(Config.AimSmooth, 1, 20)
 
@@ -3206,6 +3207,7 @@ do
         end
     end
 end
+setupAim()
 
 -- ========================== حلقة الرسم ==========================
 local function safeDraw(e, char, isBot, ref, camPos, bottomCenter, dt)
