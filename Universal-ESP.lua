@@ -47,7 +47,7 @@ local DEFAULTS = {
     -- 🎯 الأيم بوت
     AimEnabled = false, AimFOVCircle = true, AimWallCheck = true,
     AimSticky = false, AimBots = false, AimFOV = 150, AimSmooth = 6,
-    AimMousePct = 100, AimFaceChar = true,
+    AimMousePct = 100, AimFaceChar = true, AimTouchInvert = false,
     MaxDistance = 2000,
 }
 local PREF_DEFAULTS = {
@@ -89,7 +89,7 @@ local LOOT_FILTERS = {"الكل", "أسلحة/أدوات", "ذخيرة/علاج"
 local TOGGLE_KEYS = {"RightShift", "Insert", "RightControl", "Home", "End", "Delete"}
 local AIM_PARTS = {"الرأس", "الصدر", "الأقرب للمؤشر"}
 local AIM_KEYS  = {"زر الماوس الأيمن", "زر الماوس الأيسر", "تلقائي (دائماً)", "زر على الشاشة"}
-local AIM_METHODS = {"حركة الماوس", "الكاميرا"}
+local AIM_METHODS = {"تلقائي", "كاميرا", "ماوس", "لمس افتراضي"}
 local HAS_MOUSEMOVE = typeof(mousemoverel) == "function"   -- غير موجودة عادة على الهاتف
 
 -- 🆕 V24: تعريف التبويبات (لإضافة تبويب جديد أضف سطراً هنا فقط)
@@ -1094,7 +1094,11 @@ createChoice(aimPage,
 createChoice(aimPage,
     "🧲 طريقة التصويب",
     function()
-        if Prefs.AimMethodIdx == 1 and not HAS_MOUSEMOVE then return "الكاميرا (تلقائي)" end
+        if Prefs.AimMethodIdx == 1 then
+            local phone = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+            if phone then return "تلقائي (لمس)" end
+            return HAS_MOUSEMOVE and "تلقائي (ماوس)" or "تلقائي (كاميرا)"
+        end
         return AIM_METHODS[Prefs.AimMethodIdx]
     end,
     function() return Color3.fromRGB(70, 110, 80) end,
@@ -1105,12 +1109,13 @@ createToggle(aimPage, "🧱", "Wall Check", "AimWallCheck")
 createToggle(aimPage, "📌", "تثبيت الهدف", "AimSticky")
 createToggle(aimPage, "🤖", "تصويب على البوتات", "AimBots")
 createToggle(aimPage, "🧍", "الشخصية تواجه الهدف", "AimFaceChar")
+createToggle(aimPage, "🔄", "عكس اتجاه اللمس", "AimTouchInvert")
 
 createSection(aimPage, "FOV والنعومة")
 createToggle(aimPage, "⭕", "إظهار دائرة FOV", "AimFOVCircle")
 createValueSlider(aimPage, "⭕ حجم FOV", "AimFOV", 20, 600, 10, " px")
 createValueSlider(aimPage, "🐢 النعومة (1 = فوري)", "AimSmooth", 1, 20, 1, "")
-createValueSlider(aimPage, "🖱️ قوة حركة الماوس", "AimMousePct", 30, 300, 10, "%")
+createValueSlider(aimPage, "🎚️ قوة التتبع", "AimMousePct", 30, 300, 10, "%")
 
 -- ============================================================
 -- 🌍 تبويب العالم
@@ -3072,10 +3077,74 @@ local function setupAim()
         return true
     end
 
+    -- 📱 لمس افتراضي: نسحب إصبعاً وهمياً على الشاشة فتتحرك زاوية التصويب الداخلية للعبة
+    -- (نفس مسار إصبعك الحقيقي، فتتبعه الكاميرا واليد والسلاح والطلقات)
+    local vim = nil
+    pcall(function() vim = game:GetService("VirtualInputManager") end)
+    local touchBroken = false          -- يصبح true إذا لم يدعم الـ executor إرسال اللمس
+    local lastMethod = nil
+    local T_ID = 9                     -- رقم لمسة مميز حتى لا يتعارض مع لمساتك
+    local tActive, tx, ty = false, 0, 0
+
+    local function touchEnd()
+        if not tActive then return end
+        tActive = false
+        if vim then pcall(function() vim:SendTouchEvent(T_ID, 2, tx, ty) end) end
+    end
+
+    local function touchDrag(ix, iy)
+        if not vim or touchBroken then return end
+        local vpv = Camera.ViewportSize
+        if not tActive then
+            tx, ty = vpv.X * 0.62, vpv.Y * 0.32
+            local ok = pcall(function() vim:SendTouchEvent(T_ID, 0, tx, ty) end)
+            if ok then tActive = true else touchBroken = true end
+            return
+        end
+        local sign = Config.AimTouchInvert and -1 or 1
+        local nx, ny = tx + ix * sign, ty + iy * sign
+        -- إذا اقترب الإصبع الوهمي من حدود منطقة آمنة نرفعه ونبدأ لمسة جديدة
+        if nx < vpv.X * 0.45 or nx > vpv.X * 0.80 or ny < vpv.Y * 0.12 or ny > vpv.Y * 0.55 then
+            touchEnd()
+            return
+        end
+        local ok = pcall(function() vim:SendTouchEvent(T_ID, 1, nx, ny) end)
+        if ok then
+            tx, ty = nx, ny
+        else
+            touchEnd()
+            touchBroken = true
+        end
+    end
+
+    -- كم بكسل شاشة تتحرك الكاميرا لكل بكسل لمس (تقدير؛ اضبطه بشريط "قوة التتبع")
+    local function touchGain()
+        local fovHalf = math.rad(math.clamp(Camera.FieldOfView, 10, 120) / 2)
+        local pxPerRad = (Camera.ViewportSize.Y / 2) / math.tan(fovHalf)
+        return math.max(0.5, 0.0045 * math.pi * pxPerRad)
+    end
+
+    -- اختيار أفضل طريقة متاحة
+    local function resolveMethod()
+        local m = Prefs.AimMethodIdx
+        local touchOK = vim ~= nil and not touchBroken
+        if m == 2 then return "camera" end
+        if m == 3 then return mouseMoveFn and "mouse" or "camera" end
+        if m == 4 then return touchOK and "touch" or "camera" end
+        -- تلقائي
+        if touchOnly then
+            if touchOK then return "touch" end
+            return mouseMoveFn and "mouse" or "camera"
+        end
+        if mouseMoveFn then return "mouse" end
+        return touchOK and "touch" or "camera"
+    end
+
     -- 🧍 جعل الشخصية تواجه الهدف حتى تتبعها اليد والسلاح (يعمل مع طريقة الكاميرا)
     local faceActive = false
 
     local function restoreFace()
+        touchEnd()
         if not faceActive then return end
         faceActive = false
         local mc = LocalPlayer.Character
@@ -3173,8 +3242,15 @@ local function setupAim()
         local sm = Config.AimSmooth
         local alpha = (sm <= 1) and 1 or (1 - math.exp(-dt * 60 / sm))
 
-        if Prefs.AimMethodIdx == 1 and mouseMoveFn then
-            -- الطريقة 1: تحريك الماوس فعلياً، فتتبعه اللعبة نفسها (اليد والسلاح يصوّبون معه)
+        local method = resolveMethod()
+        if method ~= lastMethod then
+            lastMethod = method
+            print("[Aim] الطريقة المستخدمة: " .. method)
+        end
+        if method ~= "touch" then touchEnd() end
+
+        if method == "mouse" then
+            -- تحريك الماوس فعلياً، فتتبعه اللعبة نفسها (اليد والسلاح يصوّبون معه)
             local sp = Camera:WorldToViewportPoint(part.Position)
             local ex, ey = sp.X - center.X, sp.Y - center.Y
             if math.abs(ex) < 1 and math.abs(ey) < 1 then
@@ -3192,8 +3268,27 @@ local function setupAim()
             if ix ~= 0 or iy ~= 0 then
                 pcall(mouseMoveFn, ix, iy)
             end
+        elseif method == "touch" then
+            -- إصبع افتراضي يسحب الشاشة نحو الهدف (للهاتف)
+            local sp = Camera:WorldToViewportPoint(part.Position)
+            local ex, ey = sp.X - center.X, sp.Y - center.Y
+            if math.abs(ex) < 1 and math.abs(ey) < 1 then
+                accX, accY = 0, 0
+                return
+            end
+
+            local g = touchGain()
+            local mul = Config.AimMousePct / 100
+            local mx = math.clamp(ex * alpha * mul / g + accX, -MAX_STEP, MAX_STEP)
+            local my = math.clamp(ey * alpha * mul / g + accY, -MAX_STEP, MAX_STEP)
+            local ix = (mx >= 0) and math.floor(mx) or math.ceil(mx)
+            local iy = (my >= 0) and math.floor(my) or math.ceil(my)
+            accX, accY = mx - ix, my - iy
+            if ix ~= 0 or iy ~= 0 then
+                touchDrag(ix, iy)
+            end
         else
-            -- الطريقة 2 (احتياطية): تدوير الكاميرا مباشرة
+            -- احتياطي: تدوير الكاميرا مباشرة
             local cf = Camera.CFrame
             local goal = CFrame.lookAt(cf.Position, part.Position)
             Camera.CFrame = cf:Lerp(goal, alpha)
