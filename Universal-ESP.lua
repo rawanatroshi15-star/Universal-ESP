@@ -1,6 +1,6 @@
 --[[
 ============================================================
--- 🎯 UNIVERSAL ESP V24 — based on V23
+-- 🎯 UNIVERSAL ESP V24.1 — based on V24
 -- ✍️ By Mr.One
 -- ✅ السكيليتون: أبيض افتراضياً، لا يتأثر بـ Wall Check، وزر لتغيير لونه
 -- ✅ المركبات: مطفية افتراضياً، بدون بوكس (اسم المركبة + المسافة فقط)
@@ -9,12 +9,13 @@
 -- ✅ حفظ الإعدادات تلقائياً (writefile / readfile + JSON)
 -- ✅ اختصار كيبورد لإخفاء/إظهار القائمة (RightShift افتراضياً)
 -- ✅ V23: كشف الغنائم (Loot ESP) + آثار الأقدام (Trails)
--- 🆕 V24 — تقسيم الواجهة إلى تبويبات (Tabs):
---    👁️ ESP       : الكشف الأساسي + العناصر المرئية + الألوان
---    🎯 Aim       : الأيم بوت (FOV + نعومة + Wall Check + تثبيت الهدف)
---    🌍 العالم     : المركبات + الغنائم + آثار الأقدام
---    ⚙️ الإعدادات  : الأداء + مسافة الكشف + مفتاح القائمة + إعادة الضبط
---    + مفاتيح تشغيل بشكل Switch + عناوين أقسام + تذكّر آخر تبويب
+-- ✅ V24: تقسيم الواجهة إلى تبويبات (ESP / Aim / العالم / إعدادات)
+-- 🆕 V24.1 — إصلاح الأيم بوت مع أنيميشن السلاح:
+--    • الأيم يعمل في آخر الفريم (RenderPriority.Last) بعد سكربتات الكاميرا والسلاح
+--    • حد أقصى للتصحيح + منطقة ميتة (يمنع التذبذب مع اهتزاز/ارتداد السلاح)
+--    • تدوير الشخصية ناعم ومع منطقة ميتة (لا يحرّك السلاح)
+--    • اللمس الافتراضي يبقى حياً ويتجنب الأزرار (لا يعمل كنقرات تنشّط السلاح)
+--    • الـ ESP يُرسم أيضاً بعد أنيميشن الكاميرا فلا يتأخر عن الهدف
 -- ============================================================
 ]]
 
@@ -47,7 +48,7 @@ local DEFAULTS = {
     -- 🎯 الأيم بوت
     AimEnabled = false, AimFOVCircle = true, AimWallCheck = true,
     AimSticky = false, AimBots = false, AimFOV = 150, AimSmooth = 6,
-    AimMousePct = 100, AimFaceChar = true, AimTouchInvert = false,
+    AimMousePct = 100, AimFaceChar = false, AimTouchInvert = false,
     MaxDistance = 2000,
 }
 local PREF_DEFAULTS = {
@@ -58,8 +59,8 @@ local PREF_DEFAULTS = {
     TrailColorIdx = 1,           -- 1 = سماوي
     AimPartIdx = 1,              -- 1 = الرأس
     AimKeyIdx = 1,               -- 1 = زر الماوس الأيمن
-    AimMethodIdx = 1,            -- 1 = حركة الماوس (الأفضل)، 2 = الكاميرا مباشرة
-    LastTab = 1,                 -- 🆕 V24: آخر تبويب مفتوح
+    AimMethodIdx = 1,            -- 1 = تلقائي
+    LastTab = 1,                 -- آخر تبويب مفتوح
 }
 
 local Config, Prefs = {}, {}
@@ -92,7 +93,7 @@ local AIM_KEYS  = {"زر الماوس الأيمن", "زر الماوس الأي
 local AIM_METHODS = {"تلقائي", "كاميرا", "ماوس", "لمس افتراضي"}
 local HAS_MOUSEMOVE = typeof(mousemoverel) == "function"   -- غير موجودة عادة على الهاتف
 
--- 🆕 V24: تعريف التبويبات (لإضافة تبويب جديد أضف سطراً هنا فقط)
+-- تعريف التبويبات (لإضافة تبويب جديد أضف سطراً هنا فقط)
 local TAB_DEFS = {
     { icon = "👁️", name = "ESP" },
     { icon = "🎯", name = "Aim" },
@@ -363,7 +364,7 @@ addCorner(topBar, 10)
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -85, 1, 0)
 title.Position = UDim2.new(0, 8, 0, 0)
-title.Text = "🎯 ESP V24 • " .. AUTHOR_SIGNATURE
+title.Text = "🎯 ESP V24.1 • " .. AUTHOR_SIGNATURE
 title.TextColor3 = Color3.fromRGB(0, 255, 180)
 title.BackgroundTransparency = 1
 title.Font = Enum.Font.GothamBold
@@ -546,7 +547,7 @@ track(UserInputService.InputBegan:Connect(function(input)
 end))
 
 -- ============================================================
--- 🆕 V24: نظام التبويبات (Tabs)
+-- نظام التبويبات (Tabs)
 -- ============================================================
 local ROW_BG    = Color3.fromRGB(32, 32, 32)
 local ROW_BG_HI = Color3.fromRGB(46, 46, 46)
@@ -1235,7 +1236,7 @@ local function runLoading()
     lt.BackgroundTransparency = 1
     lt.Size = UDim2.new(1, 0, 0, 24)
     lt.Position = UDim2.new(0, 0, 0, 12)
-    lt.Text = "🎯 Universal ESP V24"
+    lt.Text = "🎯 Universal ESP V24.1"
     lt.TextColor3 = Color3.fromRGB(0, 255, 180)
     lt.Font = Enum.Font.GothamBold
     lt.TextSize = 15
@@ -1606,14 +1607,12 @@ local function buildVisuals()
 end
 
 -- ========================== 👣 آثار الأقدام (Player Trails) ==========================
--- تُسجَّل نقاط موضع القدم كل فترة قصيرة، ثم تُرسم كخطوط على الشاشة
--- (تظهر من خلف الجدران) وتزداد شفافيتها مع الزمن حتى تختفي.
 local Trail = { budget = 0, BUDGET = 600 }
 do
     local LIFE, STEP = 4.0, 0.12            -- عمر الأثر (ثواني) / كل كم ثانية نسجّل نقطة
     local LIFE_PERF, STEP_PERF = 2.5, 0.2   -- نفس القيم في وضع الأداء
     local MIN_MOVE = 0.8                    -- أقل مسافة (studs) لتسجيل نقطة جديدة
-    local TELEPORT = 40                     -- قفزة أكبر من هذا = قطع الخط (تيليبورت/إعادة ظهور)
+    local TELEPORT = 40                     -- قفزة أكبر من هذا = قطع الخط
     local MAX_POINTS = 60                   -- أقصى عدد نقاط لكل لاعب
     local MAX_DIST = 400                    -- لا نرسم آثار اللاعبين الأبعد من هذا
     local THICKNESS = 2
@@ -1666,17 +1665,14 @@ do
         local life = perf and LIFE_PERF or LIFE
         local step = perf and STEP_PERF or STEP
 
-        -- إذا توقف التحديث لفترة (اللاعب كان مخفياً) نقطع الخط عند أول نقطة جديدة
         if T.lastUpd and (now - T.lastUpd) > 0.5 then T.needBreak = true end
         T.lastUpd = now
 
-        -- حذف النقاط المنتهية
         local pts = T.pts
         while #pts > 0 and (now - pts[1].t) > life do
             table.remove(pts, 1)
         end
 
-        -- تسجيل نقطة جديدة
         T.acc = T.acc + dt
         if T.acc >= step then
             T.acc = 0
@@ -1707,7 +1703,6 @@ do
             return
         end
 
-        -- الرسم: خطوط بين كل نقطتين متتاليتين + النقطة الحية (موضع القدم الآن)
         local used = 0
         local prevScr, prevP, prevT = nil, nil, nil
         for i = 1, n + 1 do
@@ -1738,7 +1733,6 @@ do
                         local seg = getSeg(T, used)
                         local f = seg.f
 
-                        -- التلاشي: كلما كبر عمر النقطة زادت الشفافية
                         local age = ((now - t) + (now - prevT)) * 0.5
                         local fr = age / life
                         if fr < 0 then fr = 0 elseif fr > 1 then fr = 1 end
@@ -2059,14 +2053,12 @@ end
 local ARROW_MARGIN = 34
 
 local function drawArrow(v, rp, color, dist, vpX, vpY)
-    -- الاتجاه في فضاء الكاميرا (يعمل حتى لو الهدف خلفك)
     local rel = Camera.CFrame:PointToObjectSpace(rp)
     local dx, dy = rel.X, -rel.Y
     local mag = math.sqrt(dx * dx + dy * dy)
     if mag < 0.001 then dx, dy, mag = 0, 1, 1 end
     dx, dy = dx / mag, dy / mag
 
-    -- إسقاط الاتجاه على حافة الشاشة
     local halfW = math.max(10, vpX / 2 - ARROW_MARGIN)
     local halfH = math.max(10, vpY / 2 - ARROW_MARGIN)
     local tx = math.abs(dx) > 1e-4 and (halfW / math.abs(dx)) or math.huge
@@ -2107,7 +2099,6 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
     local root = getRoot(char)
     if not root or not root.Parent then hideVisuals(v) return end
 
-    -- Humanoid (يُعاد البحث فقط عند تغيّر الشخصية)
     local hum = v.hum
     if (not hum) or v.humChar ~= char or not hum:IsDescendantOf(char) then
         hum = char:FindFirstChildOfClass("Humanoid") or char:FindFirstChildWhichIsA("Humanoid", true)
@@ -2121,7 +2112,6 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
     local dist = (rp - camPos).Magnitude
     if dist > Config.MaxDistance then hideVisuals(v) return end
 
-    -- قراءة الصحة: قيمة مخصصة للعبة إن وُجدت، وإلا Humanoid
     v.hpT = v.hpT + dt
     if v.hpT >= 1 then
         v.hpT = 0
@@ -2179,7 +2169,6 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
         end
     end
 
-    -- الإسقاط: من أعلى الرأس إلى القدم، كل فريم
     local vpX, vpY = bottomCenter.X * 2, bottomCenter.Y
 
     local head = char:FindFirstChild("Head")
@@ -2201,7 +2190,7 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
     end
     local botPos = rp - Vector3.new(0, footDrop + 0.2, 0)
 
-    -- 👣 آثار الأقدام (تُرسم حتى لو كان اللاعب خلفك أو خارج الشاشة)
+    -- 👣 آثار الأقدام
     if Config.Trails then
         local tcol = isTeam and TEAM_COLOR or TRAIL_COLOR
         Trail.update(v, botPos, dt, tcol, vpX, vpY, dist)
@@ -2212,7 +2201,6 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
     local top = Camera:WorldToViewportPoint(topPos)
     local bot = Camera:WorldToViewportPoint(botPos)
 
-    -- خلف الكاميرا: نخفي الرسومات ونعرض سهماً فقط
     if top.Z <= 0 or bot.Z <= 0 then
         hideMain(v)
         if Config.Arrows then
@@ -2232,7 +2220,6 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
     local bx = math.floor(cx - bw / 2)
     local by = math.floor(math.min(top.Y, bot.Y))
 
-    -- سهم إذا كان مركز اللاعب خارج حدود الشاشة (جانب/أعلى/أسفل)
     if Config.Arrows and (cx < 0 or cx > vpX or cy < 0 or cy > vpY) then
         drawArrow(v, rp, color, dist, vpX, vpY)
     else
@@ -2277,7 +2264,7 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
         v.tracer.Visible = false
     end
 
-    -- الهيكل العظمي: لونه ثابت (SKELETON_COLOR) ولا يتأثر بـ Wall Check أو الفريق
+    -- الهيكل العظمي
     if Config.Skeleton and not Config.PerfMode and dist <= SKELETON_MAX_DIST then
         local isR15
         if hum then isR15 = hum.RigType == Enum.HumanoidRigType.R15
@@ -2382,7 +2369,7 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
         v.toolLbl.Visible = false
     end
 
-    -- الهايت لايت (يتعطل في وضع الأداء)
+    -- الهايت لايت
     if Config.Highlight and not Config.PerfMode then
         if v.highlightChar ~= char or not v.highlight or not v.highlight.Parent then
             if v.highlight then pcall(function() v.highlight:Destroy() end) end
@@ -2407,10 +2394,9 @@ local function drawESP(char, v, isBot, ref, camPos, bottomCenter, dt)
 end
 
 -- ========================== كشف المركبات (اسم + مسافة فقط) ==========================
-local VEH_MAX_DIAG = 120   -- أكبر قطر (studs) يُعتبر مركبة
+local VEH_MAX_DIAG = 120
 local MAX_VEHICLES = 60
 
--- ترتيب الفحص مهم: الأدق أولاً
 local VEH_KINDS = {
     { emoji = "🪖", word = "Tank",  keys = {"tank", "panzer", "abrams", "sherman", "apc", "ifv", "bradley", "armor", "leopard"} },
     { emoji = "🚁", word = "Heli",  keys = {"heli", "chopper", "blackhawk", "apache", "huey", "copter", "osprey"} },
@@ -2447,7 +2433,6 @@ local function classifyVehicle(model, seat)
     return CAR_KIND
 end
 
--- فلتر سريع: كراسي المباني العادية لا تُعتبر مركبات
 local function quickHint(seat)
     if seat.ClassName == "VehicleSeat" then return true end
     if hasHint(seat.Name, SEAT_HINTS) or hasHint(seat.Name, ALL_MODEL_HINTS) then return true end
@@ -2471,7 +2456,6 @@ local function modelDiag(m)
     return d
 end
 
--- أكبر Model حول الكرسي بحجم معقول (يتجنب اعتبار الماب كلها مركبة)
 local function findVehicleModel(seat)
     local best = nil
     local cur = seat.Parent
@@ -2522,7 +2506,6 @@ local function scanVehicles()
     end
 end
 
--- الفحص يبدأ فقط عند تفعيل زر المركبات (لتوفير الأداء)
 track(workspace.DescendantAdded:Connect(function(inst)
     if not vehScanned then return end
     local cn = inst.ClassName
@@ -2565,13 +2548,11 @@ local function drawVehicle(e, camPos, dt, mySeat)
         if not ref then hideVehicle(e) return end
     end
 
-    -- لا نرسم المركبة التي أنت جالس فيها
     if mySeat and mySeat:IsDescendantOf(model) then hideVehicle(e) return end
 
     local dist = (ref.Position - camPos).Magnitude
     if dist > Config.MaxDistance then hideVehicle(e) return end
 
-    -- صندوق الإحاطة يُحسب كل ثانيتين فقط لمعرفة مركز المركبة وارتفاعها
     e.bbT = e.bbT + dt
     if (not e.rel) or e.bbT >= 2 then
         e.bbT = 0
@@ -2611,16 +2592,10 @@ local function drawVehicle(e, camPos, dt, mySeat)
 end
 
 -- ========================== 💎 كشف الغنائم (Loot / Item ESP) ==========================
--- الكشف يعتمد على ثلاثة مصادر:
---   1) Tool ساقط على الأرض (خارج أي شخصية/حقيبة)  -> سلاح/أداة
---   2) ProximityPrompt بنص مثل Pick up / Loot / Collect (أدق مصدر)
---   3) Model/Part اسمه يحتوي كلمة مفتاحية (Crate, Ammo, Cash, Rifle ...)
--- لإضافة كلمات جديدة لعبتك عدّل الجداول keys في LOOT_KINDS أدناه.
 do
-    local MAX_LOOT = 200        -- أقصى عدد غنائم مسجّلة
-    local LOOT_MAX_DIAG = 40    -- أكبر قطر (studs) يُعتبر غنيمة (يستبعد المباني)
+    local MAX_LOOT = 200
+    local LOOT_MAX_DIAG = 40
 
-    -- fidx = رقم الفلتر الذي يظهر فيه (nil = يظهر فقط عند فلتر "الكل")
     local LOOT_KINDS = {
         { emoji = "🔫", label = "Weapon", fidx = 2, color = Color3.fromRGB(255, 90, 90),
           keys = {"rifle", "pistol", "shotgun", "smg", "glock", "revolver", "uzi", "sniper", "knife",
@@ -2642,16 +2617,13 @@ do
     local LOOT_ITEM_KIND = LOOT_KINDS[5]
     local LOOT_TOOL_KIND = { emoji = "🛠️", label = "Tool", fidx = 2, color = Color3.fromRGB(255, 150, 60), keys = {} }
 
-    -- كلمات نص الـ ProximityPrompt التي تدل على التقاط شيء
     local PROMPT_WORDS = {"pick", "loot", "take", "collect", "grab", "search", "equip"}
 
-    -- الأصناف التي نفحصها
     local LOOT_CLASSES = {
         Tool = true, ProximityPrompt = true, Model = true,
         Part = true, MeshPart = true, UnionOperation = true,
     }
 
-    -- كاش تصنيف الأسماء (الأسماء تتكرر كثيراً)
     local nameCache, nameCacheN = {}, 0
     local function classifyName(str)
         local s = str:lower()
@@ -2673,7 +2645,6 @@ do
         return found or nil
     end
 
-    -- استبعاد كل ما هو داخل شخصية (لاعب/بوت) أو خارج الـ workspace (مثل Backpack)
     local function isExcluded(inst)
         if inst:IsA("Model") and inst:FindFirstChildOfClass("Humanoid") then return true end
         local p = inst.Parent
@@ -2686,7 +2657,6 @@ do
         return true
     end
 
-    -- هل أحد آباء العنصر مسجّل مسبقاً؟ (لتجنب تكرار Model + Part داخله)
     local function ancestorRegistered(inst)
         local p = inst.Parent
         for _ = 1, 6 do
@@ -2762,7 +2732,6 @@ do
         end
     end
 
-    -- عناصر جديدة (إسقاط سلاح، ظهور صندوق، ستريمنج ...)
     track(workspace.DescendantAdded:Connect(function(inst)
         if not Loot.scanned then return end
         if LOOT_CLASSES[inst.ClassName] then
@@ -2820,7 +2789,7 @@ do
         e.chkT = e.chkT + dt
         if e.chkT >= 0.5 then
             e.chkT = 0
-            e.excluded = isExcluded(tgt)   -- مثلاً: التقطه لاعب فأصبح داخل شخصيته
+            e.excluded = isExcluded(tgt)
         end
         if e.excluded then hide(e) return end
 
@@ -2873,7 +2842,6 @@ do
         Loot.scanned = false
     end
 
-    -- يُستدعى كل فريم من حلقة الرسم
     function Loot.step(camPos, dt)
         if Config.LootESP and Config.ESPEnabled then
             if not Loot.scanned then
@@ -2899,14 +2867,24 @@ do
     end
 end
 
--- ========================== 🎯 الأيم بوت (Aimbot) ==========================
--- يعمل داخل حلقة الرسم (بعد سكربت الكاميرا) ويحرّك الكاميرا نحو أقرب هدف داخل FOV.
--- يستخدم Team Check و مسافة الكشف من الإعدادات العامة.
+-- ========================== 🎯 الأيم بوت V24.1 (Aimbot) ==========================
+-- إصلاح: تخريب الأيم بسبب أنيميشن السلاح / الارتداد / اهتزاز الكاميرا
+--  1) يعمل في آخر الفريم (Last) بعد كل سكربتات الكاميرا والسلاح
+--  2) حد أقصى للتصحيح + منطقة ميتة (يمنع التذبذب)
+--  3) تدوير الشخصية ناعم ومع منطقة ميتة
+--  4) اللمس الافتراضي يبقى حياً (لا يعمل كنقرات تنشّط السلاح)
 local Aim = { lock = nil }
 -- ملاحظة: الوحدة داخل دالة مستقلة لأن Luau يحدّ المتغيرات المحلية بـ 200 في المستوى الرئيسي
 local function setupAim()
     Config.AimFOV = math.clamp(Config.AimFOV, 20, 600)
     Config.AimSmooth = math.clamp(Config.AimSmooth, 1, 20)
+
+    local AIM_BIND      = BIND_NAME .. "_Aim"
+    local DEADZONE      = 2.5            -- بكسل: أقل من هذا لا نحرّك شيئاً
+    local REL_ALPHA_MAX = 0.25           -- أقصى تصحيح للفريم (ماوس/لمس) بدون تذبذب
+    local LOST_GRACE    = 0.25           -- ثانية: نبقي اللمس حياً بعد فقدان الهدف
+    local FACE_DEAD     = math.rad(3)    -- منطقة ميتة لتدوير الشخصية
+    local ZONE_X, ZONE_Y = 0.12, 0.12    -- مدى حركة الإصبع الوهمي قبل إعادة التمركز
 
     -- دائرة FOV
     local circle = Instance.new("Frame")
@@ -2921,13 +2899,13 @@ local function setupAim()
     local circleStroke = addStroke(circle, Color3.new(1, 1, 1), 1.2)
     local lastFov = nil
 
-    -- 🖱️ تحريك الماوس الحقيقي (تتبعه اللعبة: الكاميرا + اليد + السلاح)
+    -- 🖱️ تحريك الماوس الحقيقي
     local mouseMoveFn = (typeof(mousemoverel) == "function") and mousemoverel or nil
-    local accX, accY = 0, 0            -- الباقي الكسري من حركة الماوس بين الفريمات
-    local MAX_STEP = 150               -- أقصى حركة ماوس في فريم واحد
+    local accX, accY = 0, 0
+    local MAX_STEP = 150
     local sensT, sensV = 99, 1
+    local lostT = 99
 
-    -- كم بكسل على الشاشة تتحرك الكاميرا لكل وحدة ماوس (تقدير حسب حساسية روبلوكس + FOV)
     local function mouseGain(dt)
         sensT = sensT + dt
         if sensT >= 1 then
@@ -2971,7 +2949,6 @@ local function setupAim()
         local mode = Prefs.AimPartIdx
         if mode == 1 then return head or torso end
         if mode == 2 then return torso or head end
-        -- 3: الأقرب لمركز الشاشة
         if head and torso then
             local dh, dt2 = screenDist(head, center), screenDist(torso, center)
             if dh and dt2 then return (dh <= dt2) and head or torso end
@@ -2980,7 +2957,6 @@ local function setupAim()
         return head or torso
     end
 
-    -- يرجع (الجزء، المسافة عن مركز الشاشة) أو nil إذا غير صالح كهدف
     local function evaluate(char, isBot, ref, camPos, center, fov)
         if not char or not char.Parent then return nil end
         local hum = char:FindFirstChildOfClass("Humanoid")
@@ -3009,7 +2985,6 @@ local function setupAim()
         return m.X >= p.X and m.X <= p.X + s.X and m.Y >= p.Y and m.Y <= p.Y + s.Y
     end
 
-    -- 📱 جهاز لمس بدون ماوس: أزرار الماوس لا تعمل، فنستخدم زر AIM على الشاشة
     local touchOnly = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
     local function effectiveKey()
@@ -3077,14 +3052,38 @@ local function setupAim()
         return true
     end
 
-    -- 📱 لمس افتراضي: نسحب إصبعاً وهمياً على الشاشة فتتحرك زاوية التصويب الداخلية للعبة
-    -- (نفس مسار إصبعك الحقيقي، فتتبعه الكاميرا واليد والسلاح والطلقات)
+    -- 📱 لمس افتراضي
     local vim = nil
     pcall(function() vim = game:GetService("VirtualInputManager") end)
-    local touchBroken = false          -- يصبح true إذا لم يدعم الـ executor إرسال اللمس
+    local touchBroken = false
     local lastMethod = nil
-    local T_ID = 9                     -- رقم لمسة مميز حتى لا يتعارض مع لمساتك
-    local tActive, tx, ty = false, 0, 0
+    local T_ID = 9
+    local tActive, tx, ty, hx, hy = false, 0, 0, 0, 0
+
+    -- نقطة بدء اللمس: نتجنب الأزرار الظاهرة حتى لا نضغط زر إطلاق/إعادة تعبئة
+    local function pickTouchSpot()
+        local vpv = Camera.ViewportSize
+        local gui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if gui then
+            local inset = topInset()
+            local cands = { {0.62, 0.32}, {0.70, 0.25}, {0.55, 0.40}, {0.75, 0.45}, {0.50, 0.20} }
+            for _, c in ipairs(cands) do
+                local x, y = vpv.X * c[1], vpv.Y * c[2]
+                local ok, objs = pcall(gui.GetGuiObjectsAtPosition, gui, x, y - inset)
+                local free = true
+                if ok and type(objs) == "table" then
+                    for _, o in ipairs(objs) do
+                        if o.Visible and (o:IsA("GuiButton") or o.Active) then
+                            free = false
+                            break
+                        end
+                    end
+                end
+                if free then return x, y end
+            end
+        end
+        return vpv.X * 0.62, vpv.Y * 0.32
+    end
 
     local function touchEnd()
         if not tActive then return end
@@ -3092,20 +3091,29 @@ local function setupAim()
         if vim then pcall(function() vim:SendTouchEvent(T_ID, 2, tx, ty) end) end
     end
 
+    local function touchBegin()
+        local x, y = pickTouchSpot()
+        local ok = pcall(function() vim:SendTouchEvent(T_ID, 0, x, y) end)
+        if ok then
+            tActive, tx, ty, hx, hy = true, x, y, x, y
+        else
+            touchBroken = true
+        end
+    end
+
     local function touchDrag(ix, iy)
         if not vim or touchBroken then return end
-        local vpv = Camera.ViewportSize
         if not tActive then
-            tx, ty = vpv.X * 0.62, vpv.Y * 0.32
-            local ok = pcall(function() vim:SendTouchEvent(T_ID, 0, tx, ty) end)
-            if ok then tActive = true else touchBroken = true end
+            touchBegin()
             return
         end
+        local vpv = Camera.ViewportSize
         local sign = Config.AimTouchInvert and -1 or 1
         local nx, ny = tx + ix * sign, ty + iy * sign
-        -- إذا اقترب الإصبع الوهمي من حدود منطقة آمنة نرفعه ونبدأ لمسة جديدة
-        if nx < vpv.X * 0.45 or nx > vpv.X * 0.80 or ny < vpv.Y * 0.12 or ny > vpv.Y * 0.55 then
+        -- خرج الإصبع من منطقته: نعيد التمركز في نفس الفريم (بدون فريمات ضائعة)
+        if math.abs(nx - hx) > vpv.X * ZONE_X or math.abs(ny - hy) > vpv.Y * ZONE_Y then
             touchEnd()
+            touchBegin()
             return
         end
         local ok = pcall(function() vim:SendTouchEvent(T_ID, 1, nx, ny) end)
@@ -3117,21 +3125,18 @@ local function setupAim()
         end
     end
 
-    -- كم بكسل شاشة تتحرك الكاميرا لكل بكسل لمس (تقدير؛ اضبطه بشريط "قوة التتبع")
     local function touchGain()
         local fovHalf = math.rad(math.clamp(Camera.FieldOfView, 10, 120) / 2)
         local pxPerRad = (Camera.ViewportSize.Y / 2) / math.tan(fovHalf)
         return math.max(0.5, 0.0045 * math.pi * pxPerRad)
     end
 
-    -- اختيار أفضل طريقة متاحة
     local function resolveMethod()
         local m = Prefs.AimMethodIdx
         local touchOK = vim ~= nil and not touchBroken
         if m == 2 then return "camera" end
         if m == 3 then return mouseMoveFn and "mouse" or "camera" end
         if m == 4 then return touchOK and "touch" or "camera" end
-        -- تلقائي
         if touchOnly then
             if touchOK then return "touch" end
             return mouseMoveFn and "mouse" or "camera"
@@ -3140,18 +3145,21 @@ local function setupAim()
         return touchOK and "touch" or "camera"
     end
 
-    -- 🧍 جعل الشخصية تواجه الهدف حتى تتبعها اليد والسلاح (يعمل مع طريقة الكاميرا)
+    -- 🧍 تدوير الشخصية (طريقة الكاميرا فقط)
     local faceActive = false
 
-    local function restoreFace()
-        touchEnd()
+    local function releaseFace()
         if not faceActive then return end
         faceActive = false
         local mc = LocalPlayer.Character
         local mh = mc and mc:FindFirstChildOfClass("Humanoid")
         if mh then mh.AutoRotate = true end
     end
-    env.UniversalESP_AimCleanup = restoreFace
+
+    local function releaseAll()
+        touchEnd()
+        releaseFace()
+    end
 
     local function faceTarget(targetPos, alpha)
         local mc = LocalPlayer.Character
@@ -3159,21 +3167,30 @@ local function setupAim()
         local hrp = mc:FindFirstChild("HumanoidRootPart")
         local mh = mc:FindFirstChildOfClass("Humanoid")
         if not hrp or not mh or mh.Health <= 0 or mh.SeatPart then
-            restoreFace()
+            releaseFace()
             return
         end
         local dir = targetPos - hrp.Position
         local flat = Vector3.new(dir.X, 0, dir.Z)
         if flat.Magnitude < 0.5 then return end
+
+        -- منطقة ميتة: إذا الشخصية تقريباً تواجه الهدف لا نلمسها (يمنع اهتزاز السلاح)
+        local look = hrp.CFrame.LookVector
+        local lf = Vector3.new(look.X, 0, look.Z)
+        if lf.Magnitude > 0.01 then
+            local ang = math.acos(math.clamp(lf.Unit:Dot(flat.Unit), -1, 1))
+            if ang < FACE_DEAD then return end
+        end
+
         if mh.AutoRotate then
             mh.AutoRotate = false
             faceActive = true
         end
         local goal = CFrame.lookAt(hrp.Position, hrp.Position + flat)
-        hrp.CFrame = hrp.CFrame:Lerp(goal, math.max(alpha, 0.35))
+        hrp.CFrame = hrp.CFrame:Lerp(goal, math.min(alpha, 0.2))
     end
 
-    -- حالة البحث عن أقرب هدف (متغيرات خارجية لتجنب إنشاء closures كل فريم)
+    -- بحث عن أقرب هدف
     local bestPart, bestD, bestInfo
     local sCamPos, sCenter, sFov
 
@@ -3185,7 +3202,7 @@ local function setupAim()
         end
     end
 
-    function Aim.step(camPos, dt)
+    local function step(camPos, dt)
         local fov = Config.AimFOV
         local showCircle = Config.AimEnabled and Config.AimFOVCircle
         if circle.Visible ~= showCircle then circle.Visible = showCircle end
@@ -3199,7 +3216,8 @@ local function setupAim()
         if not Config.AimEnabled or not isActive() then
             Aim.lock = nil
             accX, accY = 0, 0
-            restoreFace()
+            lostT = 99
+            releaseAll()
             circleStroke.Color = Color3.new(1, 1, 1)
             return
         end
@@ -3207,7 +3225,7 @@ local function setupAim()
         local center = Camera.ViewportSize / 2
         local part = nil
 
-        -- تثبيت الهدف: نكمل على نفس الهدف طالما صالح (حتى لو خرج من FOV)
+        -- تثبيت الهدف
         local lock = Aim.lock
         if Config.AimSticky and lock then
             part = evaluate(lock.char, lock.isBot, lock.ref, camPos, center, math.huge)
@@ -3233,10 +3251,15 @@ local function setupAim()
         end
 
         if not part then
-            restoreFace()
+            -- فقدنا الهدف: لا نقطع اللمس فوراً (القطع/البدء المتكرر يُحسب نقرات)
+            lostT = lostT + dt
+            accX, accY = 0, 0
+            releaseFace()
+            if lostT > LOST_GRACE then touchEnd() end
             circleStroke.Color = Color3.new(1, 1, 1)
             return
         end
+        lostT = 0
         circleStroke.Color = Color3.fromRGB(255, 60, 60)
 
         local sm = Config.AimSmooth
@@ -3248,58 +3271,77 @@ local function setupAim()
             print("[Aim] الطريقة المستخدمة: " .. method)
         end
         if method ~= "touch" then touchEnd() end
+        if method ~= "camera" then releaseFace() end
 
         if method == "mouse" then
-            -- تحريك الماوس فعلياً، فتتبعه اللعبة نفسها (اليد والسلاح يصوّبون معه)
             local sp = Camera:WorldToViewportPoint(part.Position)
             local ex, ey = sp.X - center.X, sp.Y - center.Y
-            if math.abs(ex) < 1 and math.abs(ey) < 1 then
+            if ex * ex + ey * ey < DEADZONE * DEADZONE then
                 accX, accY = 0, 0
                 return
             end
 
             local gx, gy = mouseGain(dt)
             local mul = Config.AimMousePct / 100
-            local mx = math.clamp(ex * alpha * mul / gx + accX, -MAX_STEP, MAX_STEP)
-            local my = math.clamp(ey * alpha * mul / gy + accY, -MAX_STEP, MAX_STEP)
+            local a = math.min(alpha, REL_ALPHA_MAX)
+            local mx = math.clamp(ex * a * mul / gx + accX, -MAX_STEP, MAX_STEP)
+            local my = math.clamp(ey * a * mul / gy + accY, -MAX_STEP, MAX_STEP)
             local ix = (mx >= 0) and math.floor(mx) or math.ceil(mx)
             local iy = (my >= 0) and math.floor(my) or math.ceil(my)
             accX, accY = mx - ix, my - iy
             if ix ~= 0 or iy ~= 0 then
                 pcall(mouseMoveFn, ix, iy)
             end
+
         elseif method == "touch" then
-            -- إصبع افتراضي يسحب الشاشة نحو الهدف (للهاتف)
             local sp = Camera:WorldToViewportPoint(part.Position)
             local ex, ey = sp.X - center.X, sp.Y - center.Y
-            if math.abs(ex) < 1 and math.abs(ey) < 1 then
+            if ex * ex + ey * ey < DEADZONE * DEADZONE then
                 accX, accY = 0, 0
                 return
             end
 
             local g = touchGain()
             local mul = Config.AimMousePct / 100
-            local mx = math.clamp(ex * alpha * mul / g + accX, -MAX_STEP, MAX_STEP)
-            local my = math.clamp(ey * alpha * mul / g + accY, -MAX_STEP, MAX_STEP)
+            local a = math.min(alpha, REL_ALPHA_MAX)
+            local mx = math.clamp(ex * a * mul / g + accX, -MAX_STEP, MAX_STEP)
+            local my = math.clamp(ey * a * mul / g + accY, -MAX_STEP, MAX_STEP)
             local ix = (mx >= 0) and math.floor(mx) or math.ceil(mx)
             local iy = (my >= 0) and math.floor(my) or math.ceil(my)
             accX, accY = mx - ix, my - iy
             if ix ~= 0 or iy ~= 0 then
                 touchDrag(ix, iy)
             end
+
         else
-            -- احتياطي: تدوير الكاميرا مباشرة
+            -- كاميرا مباشرة (تُطبَّق في آخر الفريم فتغلب اهتزاز السلاح)
             local cf = Camera.CFrame
             local goal = CFrame.lookAt(cf.Position, part.Position)
             Camera.CFrame = cf:Lerp(goal, alpha)
 
-            -- الشخصية تواجه الهدف: اليد والسلاح تتبعها بدل ما تبقى متحركة
             if Config.AimFaceChar then
                 faceTarget(part.Position, alpha)
             else
-                restoreFace()
+                releaseFace()
             end
         end
+    end
+
+    -- ✅ الربط في آخر الفريم: بعد كل سكربتات الكاميرا والسلاح والأنيميشن
+    RunService:BindToRenderStep(AIM_BIND, Enum.RenderPriority.Last.Value, function(dt)
+        if not Running then return end
+        Camera = workspace.CurrentCamera
+        if not Camera then return end
+        local ok, err = pcall(step, Camera.CFrame.Position, dt)
+        if not ok and not Aim.errShown then
+            Aim.errShown = true
+            warn("[UniversalESP][Aim] خطأ: " .. tostring(err))
+        end
+    end)
+
+    env.UniversalESP_AimCleanup = function()
+        pcall(function() RunService:UnbindFromRenderStep(AIM_BIND) end)
+        releaseAll()
     end
 end
 setupAim()
@@ -3313,7 +3355,8 @@ local function safeDraw(e, char, isBot, ref, camPos, bottomCenter, dt)
     end
 end
 
-RunService:BindToRenderStep(BIND_NAME, Enum.RenderPriority.Camera.Value + 1, function(dt)
+-- يُرسم الـ ESP قبل الأيم مباشرة (Last - 1) حتى يطابق الكاميرا النهائية بعد أنيميشن السلاح
+RunService:BindToRenderStep(BIND_NAME, Enum.RenderPriority.Last.Value - 1, function(dt)
     Camera = workspace.CurrentCamera
     if not Running or not Camera then return end
 
@@ -3388,12 +3431,7 @@ RunService:BindToRenderStep(BIND_NAME, Enum.RenderPriority.Camera.Value + 1, fun
     -- 💎 الغنائم
     Loot.step(camPos, dt)
 
-    -- 🎯 الأيم بوت (آخر شيء حتى يأخذ الأولوية على الكاميرا)
-    local okA, errA = pcall(Aim.step, camPos, dt)
-    if not okA and not Aim.errShown then
-        Aim.errShown = true
-        warn("[UniversalESP][Aim] خطأ: " .. tostring(errA))
-    end
+    -- ملاحظة: الأيم بوت له ربط مستقل في آخر الفريم (داخل setupAim)
 end)
 
 track(Players.PlayerRemoving:Connect(function(plr)
@@ -3402,4 +3440,4 @@ track(Players.PlayerRemoving:Connect(function(plr)
     entries[plr] = nil
 end))
 
-print("✅ Universal ESP V24 + Aim By " .. AUTHOR_SIGNATURE .. " جاهز")
+print("✅ Universal ESP V24.1 + Aim By " .. AUTHOR_SIGNATURE .. " جاهز")
